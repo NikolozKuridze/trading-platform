@@ -48,7 +48,7 @@ export default function DepositPage() {
   const [selectedCurrency, setSelectedCurrency] = useState<string>('')
   const [selectedNetwork, setSelectedNetwork] = useState<CryptoNetwork | null>(null)
   const [depositAddress] = useState('0x742d35Cc6634C0532925a3b844Bc9e7595f87342')
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [depositMethod, setDepositMethod] = useState<'crypto' | 'fiat'>('crypto')
 
   useEffect(() => {

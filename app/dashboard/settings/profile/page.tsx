@@ -55,7 +55,7 @@ const timezones = [
 export default function ProfileSettingsPage() {
   const router = useRouter()
   const { user, loadUserSettings } = useAuthStore()
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
 
@@ -65,9 +65,12 @@ export default function ProfileSettingsPage() {
     formState: { errors, isDirty },
     reset,
     setValue,
+    watch,
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
   })
+const country = watch('country');
+const timezone = watch('timezone');
 
   useEffect(() => {
     loadProfile()
@@ -265,7 +268,7 @@ export default function ProfileSettingsPage() {
                   {...register('email')}
                 />
                 {user?.settings?.isEmailConfirmed && (
-                  <Badge variant="success">Verified</Badge>
+                  <Badge fontVariant="success">Verified</Badge>
                 )}
               </div>
               {errors.email && (
@@ -312,7 +315,7 @@ export default function ProfileSettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="country">Country</Label>
               <Select
-                value={register('country').value}
+                value={country}
                 onValueChange={(value) => setValue('country', value)}
               >
                 <SelectTrigger id="country">
@@ -334,7 +337,7 @@ export default function ProfileSettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="timezone">Timezone</Label>
               <Select
-                value={register('timezone').value}
+                value={timezone}
                 onValueChange={(value) => setValue('timezone', value)}
               >
                 <SelectTrigger id="timezone">
