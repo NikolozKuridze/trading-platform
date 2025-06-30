@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPercentage } from '@/lib/api/trading'
 import { cn } from '@/lib/utils'
+import { useTradingStore } from '@/lib/store/tradingStore'
 
 interface MarketData {
   symbol: string
@@ -17,6 +18,7 @@ interface MarketData {
 }
 
 export function MarketOverview() {
+  const { marketData, subscribeToSymbol } = useTradingStore()
   const [markets, setMarkets] = useState<MarketData[]>([
     {
       symbol: 'BTC',
@@ -68,6 +70,34 @@ export function MarketOverview() {
     },
   ])
 
+  // Update market data from WebSocket
+  useEffect(() => {
+    const updatedMarkets = markets.map(market => {
+      const wsData = marketData[`${market.symbol}/USDT`]
+      if (wsData) {
+        return {
+          ...market,
+          price: wsData.price,
+          change24h: wsData.change24h,
+          volume24h: wsData.volume24h,
+        }
+      }
+      return market
+    })
+    
+    setMarkets(updatedMarkets)
+  }, [marketData])
+
+  const formatVolume = (volume: number): string => {
+    if (volume >= 1e9) {
+      return `$${(volume / 1e9).toFixed(1)}B`
+    } else if (volume >= 1e6) {
+      return `$${(volume / 1e6).toFixed(1)}M`
+    } else {
+      return formatCurrency(volume)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -97,7 +127,7 @@ export function MarketOverview() {
                 <div className="text-right">
                   <p className="font-medium">{formatCurrency(market.price)}</p>
                   <p className="text-sm text-muted-foreground">
-                    Vol: {formatCurrency(market.volume24h, 'USD', 'en-US')}
+                    Vol: {formatVolume(market.volume24h)}
                   </p>
                 </div>
 

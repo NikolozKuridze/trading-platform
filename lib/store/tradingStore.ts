@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { tradingService } from '@/api/trading';
+import { tradingService } from '@/lib/api/trading';
 import {
   OrderDto,
   PositionDto,
@@ -8,7 +8,9 @@ import {
   PriceUpdate,
   OrderBookUpdate,
   TradeUpdate,
-} from '@/types/api.types';
+  OrderSide,
+  PositionSide,
+} from '@/api/types';
 
 interface MarketData {
   [symbol: string]: {
@@ -70,6 +72,9 @@ interface TradingState {
   closePosition: (positionId: string) => Promise<void>;
   updateStopLoss: (positionId: string, price: number) => Promise<void>;
   updateTakeProfit: (positionId: string, price: number) => Promise<void>;
+  
+  // WebSocket helpers
+  subscribeToSymbol: (symbol: string) => void;
   
   // Reset
   reset: () => void;
@@ -141,15 +146,27 @@ export const useTradingStore = create<TradingState>()(
       
       set({ isLoadingOrders: true });
       try {
-        const result = await tradingService.getOrders(selectedAccount.id, status);
+        // Load all orders without status filter, then filter client-side
+        const result = await tradingService.getOrders(selectedAccount.id);
         const orders = result.items;
         
-        if (status === 'Open' || !status) {
-          set({ openOrders: orders.filter(o => o.status === 'Open') });
-        }
-        if (status === 'Filled' || status === 'Cancelled' || !status) {
-          set({ orderHistory: orders.filter(o => o.status !== 'Open') });
-        }
+        // Filter based on status
+        const openOrders = orders.filter(o => 
+          o.status === 'Pending' || 
+          o.status === 'PartiallyFilled' || 
+          o.status === 'New'
+        );
+        
+        const completedOrders = orders.filter(o => 
+          o.status === 'Filled' || 
+          o.status === 'Cancelled' || 
+          o.status === 'Rejected'
+        );
+        
+        set({ 
+          openOrders: openOrders,
+          orderHistory: completedOrders 
+        });
       } catch (error) {
         console.error('Failed to load orders:', error);
       } finally {
@@ -166,7 +183,7 @@ export const useTradingStore = create<TradingState>()(
         const orderId = await tradingService.createMarketOrder({
           tradingAccountId: selectedAccount.id,
           symbol: selectedSymbol,
-          side: side === 'buy' ? 0 : 1,
+          side: side === 'buy' ? OrderSide.Buy : OrderSide.Sell,
           quantity,
         });
         
@@ -186,7 +203,7 @@ export const useTradingStore = create<TradingState>()(
         const orderId = await tradingService.createLimitOrder({
           tradingAccountId: selectedAccount.id,
           symbol: selectedSymbol,
-          side: side === 'buy' ? 0 : 1,
+          side: side === 'buy' ? OrderSide.Buy : OrderSide.Sell,
           quantity,
           price,
         });
@@ -225,7 +242,7 @@ export const useTradingStore = create<TradingState>()(
       const positionId = await tradingService.openPosition({
         tradingAccountId: selectedAccount.id,
         symbol: selectedSymbol,
-        side: side === 'long' ? 0 : 1,
+        side: side === 'long' ? PositionSide.Long : PositionSide.Short,
         quantity,
         leverage,
         stopLoss,
@@ -249,6 +266,11 @@ export const useTradingStore = create<TradingState>()(
     updateTakeProfit: async (positionId, price) => {
       await tradingService.updateTakeProfit(positionId, { takeProfitPrice: price });
       await get().loadPositions();
+    },
+    
+    subscribeToSymbol: (symbol) => {
+      // This is handled by the WebSocket hook
+      console.log('Subscribing to symbol:', symbol);
     },
     
     reset: () => set(initialState),

@@ -14,7 +14,9 @@ import { RecentTransactions } from '@/components/dashboard/RecentTransactions'
 import { MarketOverview } from '@/components/dashboard/MarketOverview'
 import { QuickActions } from '@/components/dashboard/QuickActions'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
-import { PortfolioDto } from '@/lib/api/types' 
+import { PortfolioDto } from '@/api/types'
+import { useTradingWebSocket } from '@/lib/api/websocket'
+
 interface DashboardStats {
   totalBalance: number
   totalPnL: number
@@ -42,6 +44,9 @@ export default function DashboardPage() {
   })
   const [isLoading, setIsLoading] = useState(true)
 
+  // Use WebSocket for real-time updates
+  useTradingWebSocket()
+
   useEffect(() => {
     loadDashboardData()
   }, [selectedAccount])
@@ -54,22 +59,56 @@ export default function DashboardPage() {
       if (accounts.length === 0) {
         const userAccounts = await tradingService.getUserAccounts()
         setAccounts(userAccounts)
+        
+        // Auto-select first account if available
+        if (userAccounts.length > 0 && !selectedAccount) {
+          useTradingStore.getState().setSelectedAccount(userAccounts[0])
+        }
       }
 
+      if (!selectedAccount) return
+
       // Load portfolio data
-      const portfolioData = await tradingService.getPortfolio()
+      const portfolioData = await tradingService.getPortfolio(selectedAccount.id)
       setPortfolio(portfolioData)
+
+      // Load analytics for P&L
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() - 30)
+      
+      const pnlData = await tradingService.getPnL(
+        selectedAccount.id,
+        startDate.toISOString(),
+        endDate.toISOString()
+      )
+
+      // Load positions and orders
+      const [positions, orders] = await Promise.all([
+        tradingService.getPositions(selectedAccount.id, 'Open'),
+        tradingService.getOrders(selectedAccount.id, 'Open')
+      ])
+
+      // Calculate daily P&L (using the last entry from daily breakdown)
+      const todayPnL = pnlData.dailyBreakdown.length > 0 
+        ? pnlData.dailyBreakdown[pnlData.dailyBreakdown.length - 1].pnL
+        : 0
+
+      const yesterdayBalance = portfolioData.totalUsdValue - todayPnL
+      const dayPnLPercentage = yesterdayBalance > 0 
+        ? (todayPnL / yesterdayBalance) * 100 
+        : 0
 
       // Calculate stats
       setStats({
         totalBalance: portfolioData.totalUsdValue,
-        totalPnL: 2543.21, // Mock data - in production, calculate from positions
-        totalPnLPercentage: 5.23,
-        dayPnL: 423.50,
-        dayPnLPercentage: 1.82,
-        activePositions: 3,
-        openOrders: 5,
-        winRate: 68.5,
+        totalPnL: pnlData.totalPnL,
+        totalPnLPercentage: pnlData.totalPnL / selectedAccount.initialBalance * 100,
+        dayPnL: todayPnL,
+        dayPnLPercentage: dayPnLPercentage,
+        activePositions: positions.length,
+        openOrders: orders.items.length,
+        winRate: pnlData.winRate,
       })
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
@@ -82,6 +121,25 @@ export default function DashboardPage() {
     return (
       <div className="flex h-96 items-center justify-center">
         <LoadingSpinner size="lg" />
+      </div>
+    )
+  }
+
+  if (!selectedAccount) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <Wallet className="h-16 w-16 text-muted-foreground" />
+        <h2 className="text-2xl font-semibold">No Trading Account</h2>
+        <p className="text-muted-foreground">Create a trading account to get started</p>
+        <Button onClick={async () => {
+          const displayName = prompt('Enter account name:')
+          if (displayName) {
+            await tradingService.createAccount({ displayName })
+            loadDashboardData()
+          }
+        }}>
+          Create Trading Account
+        </Button>
       </div>
     )
   }
@@ -99,11 +157,11 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => window.location.href = '/dashboard/analytics'}>
             <Activity className="mr-2 h-4 w-4" />
             View Analytics
           </Button>
-          <Button>
+          <Button onClick={() => window.location.href = '/dashboard/trading/spot'}>
             <TrendingUp className="mr-2 h-4 w-4" />
             Start Trading
           </Button>
@@ -171,7 +229,7 @@ export default function DashboardPage() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.winRate}%</div>
+            <div className="text-2xl font-bold">{stats.winRate.toFixed(1)}%</div>
             <Progress value={stats.winRate} className="mt-2" />
           </CardContent>
         </Card>
@@ -191,7 +249,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <PortfolioChart />
+            <PortfolioChart accountId={selectedAccount.id} />
           </CardContent>
         </Card>
 
@@ -232,7 +290,11 @@ export default function DashboardPage() {
               <div className="text-center py-8 text-muted-foreground">
                 <Wallet className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No holdings yet</p>
-                <Button variant="link" className="mt-2">
+                <Button 
+                  variant="link" 
+                  className="mt-2"
+                  onClick={() => window.location.href = '/dashboard/wallet/deposit'}
+                >
                   Make your first deposit
                 </Button>
               </div>
@@ -244,7 +306,7 @@ export default function DashboardPage() {
       {/* Recent Activity */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <div className="col-span-4">
-          <RecentTransactions />
+          <RecentTransactions accountId={selectedAccount.id} />
         </div>
         <div className="col-span-3">
           <MarketOverview />
@@ -265,7 +327,11 @@ export default function DashboardPage() {
                   Total margin: {formatCurrency(4532.10)}
                 </p>
               </div>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.location.href = '/dashboard/trading/futures'}
+              >
                 View All
               </Button>
             </div>
@@ -284,7 +350,11 @@ export default function DashboardPage() {
                   Total value: {formatCurrency(12450.00)}
                 </p>
               </div>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.location.href = '/dashboard/trading/spot'}
+              >
                 Manage
               </Button>
             </div>
@@ -298,12 +368,16 @@ export default function DashboardPage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold">{formatCurrency(45320, 'USD', 'en-US')}</p>
+                <p className="text-3xl font-bold">{formatCurrency(45320)}</p>
                 <p className="text-sm text-muted-foreground">
                   Across 28 trades
                 </p>
               </div>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.location.href = '/dashboard/transactions'}
+              >
                 Details
               </Button>
             </div>

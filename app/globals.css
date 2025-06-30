@@ -25,6 +25,20 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
+     --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --danger: 0 84% 60%;
+    --danger-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --buy: 142 71% 45%;
+    --buy-hover: 142 71% 40%;
+    
+    --sell: 0 84% 60%;
+    --sell-hover: 0 84% 55%;
   }
 
   .dark {
@@ -47,6 +61,20 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
+     --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --danger: 0 84% 60%;
+    --danger-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --buy: 142 71% 45%;
+    --buy-hover: 142 71% 40%;
+    
+    --sell: 0 84% 60%;
+    --sell-hover: 0 84% 55%;
   }
 }
 

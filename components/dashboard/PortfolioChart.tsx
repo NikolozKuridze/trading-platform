@@ -1,88 +1,129 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createChart, ColorType, IChartApi, ISeriesApi } from 'lightweight-charts'
 import { useTheme } from 'next-themes'
+import { tradingService } from '@/lib/api/trading'
+import { PnLDto } from '@/api/types'
 
-interface ChartData {
-  time: string
-  value: number
+interface PortfolioChartProps {
+  accountId?: string
 }
 
-export function PortfolioChart() {
+export function PortfolioChart({ accountId }: PortfolioChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null)
   const { theme } = useTheme()
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     if (!chartContainerRef.current) return
 
-    // Sample data - in production, this would come from the API
-    const data: ChartData[] = generateSampleData()
+    const loadChartData = async () => {
+      try {
+        setIsLoading(true)
+        
+        let data: any[] = []
+        
+        if (accountId) {
+          // Load real data from API
+          const endDate = new Date()
+          const startDate = new Date()
+          startDate.setDate(startDate.getDate() - 30)
+          
+          const pnlData = await tradingService.getPnL(
+            accountId,
+            startDate.toISOString(),
+            endDate.toISOString()
+          )
+          
+          // Convert PnL data to chart format
+          let cumulativeValue = 10000 // Starting value
+          data = pnlData.dailyBreakdown.map(day => {
+            cumulativeValue += day.pnL
+            return {
+              time: day.date,
+              value: cumulativeValue
+            }
+          })
+        }
+        
+        // If no data, use sample data
+        if (data.length === 0) {
+          data = generateSampleData()
+        }
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
-      },
-      grid: {
-        vertLines: {
-          color: theme === 'dark' ? '#27272a' : '#e5e5e5',
-        },
-        horzLines: {
-          color: theme === 'dark' ? '#27272a' : '#e5e5e5',
-        },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
-      timeScale: {
-        timeVisible: true,
-        borderColor: theme === 'dark' ? '#27272a' : '#e5e5e5',
-      },
-      rightPriceScale: {
-        borderColor: theme === 'dark' ? '#27272a' : '#e5e5e5',
-      },
-    })
-
-    chartRef.current = chart
-
-    const areaSeries = chart.addAreaSeries({
-      lineColor: '#3b82f6',
-      topColor: '#3b82f680',
-      bottomColor: '#3b82f610',
-      lineWidth: 2,
-      priceFormat: {
-        type: 'price',
-        precision: 2,
-        minMove: 0.01,
-      },
-    })
-
-    seriesRef.current = areaSeries
-    areaSeries.setData(data)
-
-    // Fit content
-    chart.timeScale().fitContent()
-
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
+        const chart = createChart(chartContainerRef.current, {
+          layout: {
+            background: { type: ColorType.Solid, color: 'transparent' },
+            textColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
+          },
+          grid: {
+            vertLines: {
+              color: theme === 'dark' ? '#27272a' : '#e5e5e5',
+            },
+            horzLines: {
+              color: theme === 'dark' ? '#27272a' : '#e5e5e5',
+            },
+          },
           width: chartContainerRef.current.clientWidth,
+          height: 400,
+          timeScale: {
+            timeVisible: true,
+            borderColor: theme === 'dark' ? '#27272a' : '#e5e5e5',
+          },
+          rightPriceScale: {
+            borderColor: theme === 'dark' ? '#27272a' : '#e5e5e5',
+          },
         })
+
+        chartRef.current = chart
+
+        const areaSeries = chart.addAreaSeries({
+          lineColor: '#3b82f6',
+          topColor: '#3b82f680',
+          bottomColor: '#3b82f610',
+          lineWidth: 2,
+          priceFormat: {
+            type: 'price',
+            precision: 2,
+            minMove: 0.01,
+          },
+        })
+
+        seriesRef.current = areaSeries
+        areaSeries.setData(data)
+
+        // Fit content
+        chart.timeScale().fitContent()
+
+        // Handle resize
+        const handleResize = () => {
+          if (chartContainerRef.current && chartRef.current) {
+            chartRef.current.applyOptions({
+              width: chartContainerRef.current.clientWidth,
+            })
+          }
+        }
+
+        window.addEventListener('resize', handleResize)
+
+        return () => {
+          window.removeEventListener('resize', handleResize)
+          if (chartRef.current) {
+            chartRef.current.remove()
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load portfolio chart data:', error)
+      } finally {
+        setIsLoading(false)
       }
     }
 
-    window.addEventListener('resize', handleResize)
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      if (chartRef.current) {
-        chartRef.current.remove()
-      }
-    }
-  }, [theme])
+    loadChartData()
+  }, [theme, accountId])
 
   // Update chart when theme changes
   useEffect(() => {
@@ -110,12 +151,20 @@ export function PortfolioChart() {
     })
   }, [theme])
 
+  if (isLoading && accountId) {
+    return (
+      <div className="w-full h-[400px] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
   return <div ref={chartContainerRef} className="w-full h-[400px]" />
 }
 
 // Generate sample data for the last 30 days
-function generateSampleData(): ChartData[] {
-  const data: ChartData[] = []
+function generateSampleData(): any[] {
+  const data: any[] = []
   const now = new Date()
   const baseValue = 20000
 

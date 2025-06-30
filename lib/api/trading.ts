@@ -274,13 +274,36 @@ export const calculateMarginRequired = (
 };
 
 export const formatCurrency = (
-amount: number, currency: string = 'USD', locale: string = 'en-US'): string => {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: currency === 'BTC' || currency === 'ETH' ? 8 : 2,
-  }).format(amount);
+  amount: number, 
+  currency: string = 'USD', 
+  locale: string = 'en-US',
+  compact: boolean = false
+): string => {
+  // Handle crypto currencies that aren't valid ISO currency codes
+  const cryptoCurrencies = ['BTC', 'ETH', 'BNB', 'SOL', 'USDT', 'USDC', 'XRP', 'ADA', 'DOT', 'MATIC'];
+  
+  if (cryptoCurrencies.includes(currency)) {
+    const formatter = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: currency === 'BTC' || currency === 'ETH' ? 8 : 2,
+      maximumFractionDigits: currency === 'BTC' || currency === 'ETH' ? 8 : 2,
+      notation: compact ? 'compact' : 'standard',
+    });
+    return `${formatter.format(amount)} ${currency}`;
+  }
+  
+  // For fiat currencies, use the standard currency formatter
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency === 'USDT' || currency === 'USDC' ? 'USD' : currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      notation: compact ? 'compact' : 'standard',
+    }).format(amount);
+  } catch (error) {
+    // Fallback for any other invalid currency codes
+    return `${amount.toFixed(2)} ${currency}`;
+  }
 };
 
 export const formatPercentage = (value: number, decimals: number = 2): string => {
