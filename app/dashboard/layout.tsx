@@ -22,6 +22,12 @@ export default function DashboardLayout({
        checkAuth()
   }, [checkAuth, router])
 
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/auth/login')
+    }
+  }, [isLoading, isAuthenticated, router])
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -29,9 +35,8 @@ export default function DashboardLayout({
       </div>
     )
   }
-
-  if (!isAuthenticated) {
-    return null
+if (!isAuthenticated) {
+    return null  
   }
 
   return (

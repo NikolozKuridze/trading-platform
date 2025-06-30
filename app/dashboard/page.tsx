@@ -14,8 +14,7 @@ import { RecentTransactions } from '@/components/dashboard/RecentTransactions'
 import { MarketOverview } from '@/components/dashboard/MarketOverview'
 import { QuickActions } from '@/components/dashboard/QuickActions'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
-import { PortfolioDto } from '@/lib/api/types'
-
+import { PortfolioDto } from '@/lib/api/types' 
 interface DashboardStats {
   totalBalance: number
   totalPnL: number
