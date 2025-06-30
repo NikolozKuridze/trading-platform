@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { toast } from 'react-hot-toast';
-import { AuthenticationResult, RefreshTokenCommand } from '@/types/api.types';
+import { AuthenticationResult, RefreshTokenCommand } from '@/api/types';
 
 const AUTH_API_URL = process.env.NEXT_PUBLIC_AUTH_API_URL || 'http://localhost:5168';
 const TRADING_API_URL = process.env.NEXT_PUBLIC_TRADING_API_URL || 'http://localhost:5193';
@@ -108,7 +108,7 @@ const addResponseInterceptor = (instance: AxiosInstance) => {
 
         if (!refreshToken || !accessToken) {
           clearTokens();
-          window.location.href = '/login';
+          window.location.href = '/auth/login';
           return Promise.reject(error);
         }
 
@@ -138,7 +138,7 @@ const addResponseInterceptor = (instance: AxiosInstance) => {
         } catch (refreshError) {
           processQueue(refreshError as AxiosError, null);
           clearTokens();
-          window.location.href = '/login';
+          window.location.href = '/auth/login';
           return Promise.reject(refreshError);
         } finally {
           isRefreshing = false;

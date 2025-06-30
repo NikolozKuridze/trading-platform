@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authService } from '@/api/auth';
-import { AuthenticationResult, UserSettingsQueryResponse } from '@/types/api.types';
+import { AuthenticationResult, UserSettingsQueryResponse } from '@/api/types';
 import { clearTokens } from '@/api/client';
 
 interface User {
@@ -105,7 +105,8 @@ export const useAuthStore = create<AuthState>()(
       checkAuth: async () => {
         set({ isLoading: true });
         try {
-          const isAuthorized = await authService.isAuthorized();
+          
+          const isAuthorized = await authService.isAuthorized(); 
           if (isAuthorized) {
             await get().loadUserSettings();
             return true;

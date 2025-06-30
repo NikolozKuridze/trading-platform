@@ -13,13 +13,13 @@ import { formatCurrency } from '@/lib/api/trading'
 import { copyToClipboard } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
-import { WalletDto } from '@/lib/types/api.types'
+import { WalletDto } from '@/api/types'
 
 export default function WalletPage() {
   const router = useRouter()
   const { selectedAccount } = useTradingStore()
   const [wallets, setWallets] = useState<WalletDto[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [selectedWallet, setSelectedWallet] = useState<WalletDto | null>(null)
 
   useEffect(() => {

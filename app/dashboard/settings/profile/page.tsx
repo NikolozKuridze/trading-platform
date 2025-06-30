@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { ArrowLeft, Camera, User, Mail, Phone, Globe } from 'lucide-react'
+import { ArrowLeft, Camera, User, Mail, Phone, Globe, Badge } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Separator } from '@/components/ui/separator'
+import { Separator } from '@/components/ui/seperator'
 import { useAuthStore } from '@/lib/store/authStore'
 import { toast } from 'react-hot-toast'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -139,7 +139,7 @@ export default function ProfileSettingsPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push('/settings')}
+          onClick={() => router.push('/dashboard/settings')}
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>

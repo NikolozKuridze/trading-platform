@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { User, Shield, Bell, Palette, Globe, Key, Smartphone } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+import { Separator } from '@/components/ui/seperator'
 
 const settingsCategories = [
   {

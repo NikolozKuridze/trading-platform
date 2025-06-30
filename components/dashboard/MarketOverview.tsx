@@ -97,7 +97,7 @@ export function MarketOverview() {
                 <div className="text-right">
                   <p className="font-medium">{formatCurrency(market.price)}</p>
                   <p className="text-sm text-muted-foreground">
-                    Vol: {formatCurrency(market.volume24h, 'USD', 'en-US', true)}
+                    Vol: {formatCurrency(market.volume24h, 'USD', 'en-US')}
                   </p>
                 </div>
 

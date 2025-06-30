@@ -19,11 +19,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    checkAuth().then((authenticated) => {
-      if (!authenticated) {
-        router.push('/login')
-      }
-    })
+       checkAuth()
   }, [checkAuth, router])
 
   if (isLoading) {

@@ -30,15 +30,15 @@ const navigation = [
     name: 'Trading',
     icon: TrendingUp,
     children: [
-      { name: 'Spot Trading', href: '/trading/spot', icon: Coins },
-      { name: 'Futures Trading', href: '/trading/futures', icon: CandlestickChart },
-      { name: 'Trading History', href: '/trading/history', icon: History },
+      { name: 'Spot Trading', href: '/dashboard/trading/spot', icon: Coins },
+      { name: 'Futures Trading', href: '/dashboard/trading/futures', icon: CandlestickChart },
+      { name: 'Trading History', href: '/dashboard/trading/history', icon: History },
     ],
   },
-  { name: 'Wallet', href: '/wallet', icon: Wallet },
-  { name: 'Transactions', href: '/transactions', icon: History },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Wallet', href: '/dashboard/wallet', icon: Wallet },
+  { name: 'Transactions', href: '/dashboard/transactions', icon: History },
+  { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
 const helpItems = [

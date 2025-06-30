@@ -14,7 +14,7 @@ import { tradingService } from '@/lib/api/trading'
 import { copyToClipboard } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
-import { WalletDto } from '@/lib/types/api.types'
+import { WalletDto } from '@/api/types'
 
 interface CryptoNetwork {
   name: string

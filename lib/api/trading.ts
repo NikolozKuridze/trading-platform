@@ -27,7 +27,7 @@ import {
   ForceCloseRequest,
   AdjustExecutionRequest,
   GlobalManipulationRequest,
-} from '@/types/api.types';
+} from '@/api/types';
 
 export const tradingService = {
   // Trading Account Management
@@ -274,10 +274,7 @@ export const calculateMarginRequired = (
 };
 
 export const formatCurrency = (
-  amount: number,
-  currency: string = 'USD',
-  locale: string = 'en-US'
-): string => {
+amount: number, currency: string = 'USD', locale: string = 'en-US'): string => {
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: currency,

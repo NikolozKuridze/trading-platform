@@ -68,7 +68,7 @@ export const authService = {
       await authApi.post('/api/auth/logout');
     } finally {
       clearTokens();
-      window.location.href = '/login';
+      window.location.href = '/auth/login';
     }
   },
 
@@ -78,7 +78,7 @@ export const authService = {
   async invalidateAllSessions(): Promise<void> {
     await authApi.post('/api/auth/invalidate-all-sessions');
     clearTokens();
-    window.location.href = '/login';
+    window.location.href = '/auth/login';
   },
 
   /**

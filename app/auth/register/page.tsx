@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { authService, validatePassword } from '@/lib/api/auth'
+import React from 'react'
 
 const registerSchema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
@@ -46,14 +47,17 @@ export default function RegisterPage() {
     feedback: string[]
   }>({ score: 0, feedback: [] })
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    watch,
-  } = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
-  })
+const {
+  register,
+  handleSubmit,
+  formState: { errors },
+  watch,
+  setValue,
+  control,
+} = useForm<RegisterFormData>({
+  resolver: zodResolver(registerSchema),
+})
+
 
   const password = watch('password')
   const agreeToTerms = watch('agreeToTerms')
@@ -85,7 +89,7 @@ export default function RegisterPage() {
       })
       
       toast.success('Registration successful! Please check your email to verify your account.')
-      router.push('/login')
+      router.push('/auth/login')
     } catch (error: any) {
       if (error.response?.status === 409) {
         toast.error('Email or username already exists')
@@ -278,15 +282,14 @@ export default function RegisterPage() {
 
         <div className="space-y-2">
           <div className="flex items-start space-x-2">
-            <Checkbox
-              id="agreeToTerms"
-              checked={agreeToTerms}
-              onCheckedChange={(checked) => {
-                register('agreeToTerms').onChange({
-                  target: { value: checked },
-                })
-              }}
-            />
+           <Checkbox
+  id="agreeToTerms"
+  checked={agreeToTerms}
+  onCheckedChange={(checked: boolean) => {
+    setValue('agreeToTerms', checked, { shouldValidate: true })
+  }}
+/>
+
             <div className="grid gap-1.5 leading-none">
               <Label
                 htmlFor="agreeToTerms"
@@ -315,7 +318,7 @@ export default function RegisterPage() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{' '}
-        <Link href="/login" className="font-medium text-primary hover:underline">
+        <Link href="/auth/login" className="font-medium text-primary hover:underline">
           Sign in
         </Link>
       </p>

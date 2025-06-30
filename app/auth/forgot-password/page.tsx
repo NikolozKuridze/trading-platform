@@ -76,7 +76,7 @@ export default function ForgotPasswordPage() {
               Try another email
             </Button>
             <Button asChild className="w-full">
-              <Link href="/login">Back to login</Link>
+              <Link href="/auth/login">Back to login</Link>
             </Button>
           </div>
         </CardContent>
@@ -120,7 +120,7 @@ export default function ForgotPasswordPage() {
 
       <div className="mt-6 text-center">
         <Link
-          href="/login"
+          href="/auth/login"
           className="inline-flex items-center text-sm text-primary hover:underline"
         >
           <ArrowLeft className="mr-1 h-4 w-4" />

@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Separator } from '@/components/ui/separator'
+import { Separator } from '@/components/ui/seperator'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/lib/store/authStore'
 import { authService, validatePassword } from '@/lib/api/auth'
@@ -149,7 +149,7 @@ export default function SecuritySettingsPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push('/settings')}
+          onClick={() => router.push('/dashboard/settings')}
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
