@@ -1,3 +1,4 @@
+// components/trading/TradingChart.tsx
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -5,20 +6,24 @@ import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickData, Time } 
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { binanceService } from '@/lib/api/binance'
+import LoadingSpinner from '@/components/shared/LoadingSpinner'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AlertCircle, RefreshCw } from 'lucide-react'
 
 interface TradingChartProps {
   symbol: string
 }
 
 const timeframes = [
-  { label: '1m', value: '1' },
-  { label: '5m', value: '5' },
-  { label: '15m', value: '15' },
-  { label: '30m', value: '30' },
-  { label: '1h', value: '60' },
-  { label: '4h', value: '240' },
-  { label: '1d', value: '1D' },
-  { label: '1w', value: '1W' },
+  { label: '1m', value: '1', interval: '1m' },
+  { label: '5m', value: '5', interval: '5m' },
+  { label: '15m', value: '15', interval: '15m' },
+  { label: '30m', value: '30', interval: '30m' },
+  { label: '1h', value: '60', interval: '1h' },
+  { label: '4h', value: '240', interval: '4h' },
+  { label: '1d', value: '1D', interval: '1d' },
+  { label: '1w', value: '1W', interval: '1w' },
 ]
 
 export function TradingChart({ symbol }: TradingChartProps) {
@@ -29,6 +34,9 @@ export function TradingChart({ symbol }: TradingChartProps) {
   const { theme } = useTheme()
   const [selectedTimeframe, setSelectedTimeframe] = useState('60')
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle')
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -47,7 +55,7 @@ export function TradingChart({ symbol }: TradingChartProps) {
         },
       },
       width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight - 50, // Account for toolbar
+      height: chartContainerRef.current.clientHeight - 50,
       timeScale: {
         timeVisible: true,
         borderColor: theme === 'dark' ? '#27272a' : '#e5e5e5',
@@ -90,20 +98,6 @@ export function TradingChart({ symbol }: TradingChartProps) {
       },
     })
 
-    // Load sample data
-    const data = generateCandleData()
-    candlestickSeries.setData(data)
-    
-    const volumeData = data.map(candle => ({
-      time: candle.time,
-      value: Math.random() * 1000000,
-      color: candle.close >= candle.open ? '#10b98180' : '#ef444480',
-    }))
-    volumeSeries.setData(volumeData)
-
-    // Fit content
-    chart.timeScale().fitContent()
-
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -122,6 +116,18 @@ export function TradingChart({ symbol }: TradingChartProps) {
       }
     }
   }, [theme])
+
+  // Load historical data
+  useEffect(() => {
+    loadHistoricalData()
+    
+    // Set up auto-refresh every 10 seconds
+    const interval = setInterval(() => {
+      loadHistoricalData(true)
+    }, 10000)
+
+    return () => clearInterval(interval)
+  }, [symbol, selectedTimeframe])
 
   // Update chart colors when theme changes
   useEffect(() => {
@@ -149,6 +155,98 @@ export function TradingChart({ symbol }: TradingChartProps) {
     })
   }, [theme])
 
+  const loadHistoricalData = async (isUpdate = false) => {
+    try {
+      if (!isUpdate) {
+        setIsLoading(true)
+        setError(null)
+      }
+
+      // Convert symbol format (BTC/USDT -> BTCUSDT)
+      const binanceSymbol = symbol.replace('/', '')
+      
+      // Get the interval for the selected timeframe
+      const timeframeConfig = timeframes.find(tf => tf.value === selectedTimeframe)
+      const interval = timeframeConfig?.interval || '1h'
+      
+      // Fetch data from Binance API
+      const data = await binanceService.getHistoricalData(binanceSymbol, interval, 500)
+      
+      // Transform to candlestick data
+      const candleData: CandlestickData[] = data.map((candle: any[]) => ({
+        time: (candle[0] / 1000) as Time, // Convert milliseconds to seconds
+        open: parseFloat(candle[1]),
+        high: parseFloat(candle[2]),
+        low: parseFloat(candle[3]),
+        close: parseFloat(candle[4]),
+      }))
+      
+      if (candlestickSeriesRef.current && candleData.length > 0) {
+        candlestickSeriesRef.current.setData(candleData)
+      }
+      
+      // Volume data
+      const volumeData = data.map((candle: any[]) => ({
+        time: (candle[0] / 1000) as Time,
+        value: parseFloat(candle[5]),
+        color: parseFloat(candle[4]) >= parseFloat(candle[1]) 
+          ? '#10b98180' 
+          : '#ef444480',
+      }))
+      
+      if (volumeSeriesRef.current && volumeData.length > 0) {
+        volumeSeriesRef.current.setData(volumeData)
+      }
+      
+      // Fit content on first load
+      if (!isUpdate && chartRef.current) {
+        chartRef.current.timeScale().fitContent()
+      }
+      
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error('Failed to load historical data:', error)
+      setError('Failed to load chart data. Please try again.')
+      
+      // If loading fails, show sample data
+      if (!isUpdate) {
+        loadSampleData()
+      }
+    } finally {
+      if (!isUpdate) {
+        setIsLoading(false)
+      }
+    }
+  }
+
+  const loadSampleData = () => {
+    const data = generateCandleData()
+    
+    if (candlestickSeriesRef.current) {
+      candlestickSeriesRef.current.setData(data)
+    }
+    
+    const volumeData = data.map(candle => ({
+      time: candle.time,
+      value: Math.random() * 1000000,
+      color: candle.close >= candle.open ? '#10b98180' : '#ef444480',
+    }))
+    
+    if (volumeSeriesRef.current) {
+      volumeSeriesRef.current.setData(volumeData)
+    }
+    
+    chartRef.current?.timeScale().fitContent()
+  }
+
+  const handleTimeframeChange = (value: string) => {
+    setSelectedTimeframe(value)
+  }
+
+  const handleRefresh = () => {
+    loadHistoricalData()
+  }
+
   return (
     <div className="h-full flex flex-col">
       {/* Chart Toolbar */}
@@ -165,7 +263,7 @@ export function TradingChart({ symbol }: TradingChartProps) {
                   "rounded-none px-3 h-8",
                   selectedTimeframe === tf.value && "bg-muted"
                 )}
-                onClick={() => setSelectedTimeframe(tf.value)}
+                onClick={() => handleTimeframeChange(tf.value)}
               >
                 {tf.label}
               </Button>
@@ -199,8 +297,19 @@ export function TradingChart({ symbol }: TradingChartProps) {
           </div>
         </div>
 
-        {/* Indicators (placeholder) */}
+        {/* Right side controls */}
         <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            Last update: {lastUpdate.toLocaleTimeString()}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          </Button>
           <Button variant="ghost" size="sm">
             Indicators
           </Button>
@@ -211,12 +320,29 @@ export function TradingChart({ symbol }: TradingChartProps) {
       </div>
 
       {/* Chart Container */}
-      <div ref={chartContainerRef} className="flex-1" />
+      <div className="flex-1 relative">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+            <LoadingSpinner size="lg" />
+          </div>
+        )}
+        
+        {error && !isLoading && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
+            <Alert variant="destructive" className="w-fit">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+        
+        <div ref={chartContainerRef} className="w-full h-full" />
+      </div>
     </div>
   )
 }
 
-// Generate sample candlestick data
+// Generate sample candlestick data (fallback)
 function generateCandleData(): CandlestickData[] {
   const data: CandlestickData[] = []
   const now = new Date()

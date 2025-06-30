@@ -20,107 +20,51 @@ export function PortfolioChart({ accountId }: PortfolioChartProps) {
   useEffect(() => {
     if (!chartContainerRef.current) return
 
+   
     const loadChartData = async () => {
-      try {
-        setIsLoading(true)
+  try {
+    setIsLoading(true)
+    
+    if (accountId) {
+      // პორტფოლიოს ისტორიული მონაცემები
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() - 30)
+      
+      // Get portfolio snapshot
+      const portfolio = await tradingService.getPortfolio(accountId)
+      
+      // Get P&L data for chart
+      const pnlData = await tradingService.getPnL(
+        accountId,
+        startDate.toISOString(),
+        endDate.toISOString()
+      )
+      
+      // Calculate portfolio value over time
+      let baseValue = portfolio.totalUsdValue
+      const data = pnlData.dailyBreakdown.map((day, index) => {
+        // Calculate cumulative value
+        const cumulativePnL = pnlData.dailyBreakdown
+          .slice(0, index + 1)
+          .reduce((sum, d) => sum + d.pnL, 0)
         
-        let data: any[] = []
-        
-        if (accountId) {
-          // Load real data from API
-          const endDate = new Date()
-          const startDate = new Date()
-          startDate.setDate(startDate.getDate() - 30)
-          
-          const pnlData = await tradingService.getPnL(
-            accountId,
-            startDate.toISOString(),
-            endDate.toISOString()
-          )
-          
-          // Convert PnL data to chart format
-          let cumulativeValue = 10000 // Starting value
-          data = pnlData.dailyBreakdown.map(day => {
-            cumulativeValue += day.pnL
-            return {
-              time: day.date,
-              value: cumulativeValue
-            }
-          })
+        return {
+          time: day.date,
+          value: baseValue - pnlData.totalPnL + cumulativePnL
         }
-        
-        // If no data, use sample data
-        if (data.length === 0) {
-          data = generateSampleData()
-        }
-
-        const chart = createChart(chartContainerRef.current, {
-          layout: {
-            background: { type: ColorType.Solid, color: 'transparent' },
-            textColor: theme === 'dark' ? '#a1a1aa' : '#71717a',
-          },
-          grid: {
-            vertLines: {
-              color: theme === 'dark' ? '#27272a' : '#e5e5e5',
-            },
-            horzLines: {
-              color: theme === 'dark' ? '#27272a' : '#e5e5e5',
-            },
-          },
-          width: chartContainerRef.current.clientWidth,
-          height: 400,
-          timeScale: {
-            timeVisible: true,
-            borderColor: theme === 'dark' ? '#27272a' : '#e5e5e5',
-          },
-          rightPriceScale: {
-            borderColor: theme === 'dark' ? '#27272a' : '#e5e5e5',
-          },
-        })
-
-        chartRef.current = chart
-
-        const areaSeries = chart.addAreaSeries({
-          lineColor: '#3b82f6',
-          topColor: '#3b82f680',
-          bottomColor: '#3b82f610',
-          lineWidth: 2,
-          priceFormat: {
-            type: 'price',
-            precision: 2,
-            minMove: 0.01,
-          },
-        })
-
-        seriesRef.current = areaSeries
-        areaSeries.setData(data)
-
-        // Fit content
-        chart.timeScale().fitContent()
-
-        // Handle resize
-        const handleResize = () => {
-          if (chartContainerRef.current && chartRef.current) {
-            chartRef.current.applyOptions({
-              width: chartContainerRef.current.clientWidth,
-            })
-          }
-        }
-
-        window.addEventListener('resize', handleResize)
-
-        return () => {
-          window.removeEventListener('resize', handleResize)
-          if (chartRef.current) {
-            chartRef.current.remove()
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load portfolio chart data:', error)
-      } finally {
-        setIsLoading(false)
+      })
+      
+      if (seriesRef.current && data.length > 0) {
+        seriesRef.current.setData(data)
       }
     }
+  } catch (error) {
+    console.error('Failed to load portfolio chart data:', error)
+  } finally {
+    setIsLoading(false)
+  }
+}
 
     loadChartData()
   }, [theme, accountId])

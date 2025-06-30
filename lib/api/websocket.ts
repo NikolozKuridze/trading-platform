@@ -2,6 +2,13 @@ import { PriceUpdate, OrderBookUpdate, TradeUpdate } from './types';
 
 type MessageHandler = (data: any) => void;
 
+interface WebSocketMessage {
+  type: string;
+  payload: any;
+  channel?: string;
+  symbol?: string;
+}
+
 class TradingWebSocket {
   private ws: WebSocket | null = null;
   private reconnectInterval: number = 5000;
@@ -10,8 +17,10 @@ class TradingWebSocket {
   private subscriptions: Map<string, Set<MessageHandler>> = new Map();
   private messageQueue: any[] = [];
   private isConnected: boolean = false;
+  private reconnectTimeout: NodeJS.Timeout | null = null;
+  private pingInterval: NodeJS.Timeout | null = null;
 
-  constructor(url: string = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5193') {
+  constructor(url: string = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5193/ws') {
     this.url = url;
   }
 
@@ -20,12 +29,26 @@ class TradingWebSocket {
       try {
         // Append token to URL if provided
         const wsUrl = token ? `${this.url}?token=${token}` : this.url;
+        console.log('Connecting to WebSocket:', wsUrl);
+        
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
           console.log('WebSocket connected');
           this.isConnected = true;
+          
+          // Clear any pending reconnect
+          if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+          }
+          
+          // Start ping interval to keep connection alive
+          this.startPingInterval();
+          
+          // Flush any queued messages
           this.flushMessageQueue();
+          
           resolve();
         };
 
@@ -46,9 +69,12 @@ class TradingWebSocket {
         this.ws.onclose = () => {
           console.log('WebSocket disconnected');
           this.isConnected = false;
+          this.stopPingInterval();
           
-          if (this.shouldReconnect) {
-            setTimeout(() => this.reconnect(token), this.reconnectInterval);
+          if (this.shouldReconnect && !this.reconnectTimeout) {
+            this.reconnectTimeout = setTimeout(() => {
+              this.reconnect(token);
+            }, this.reconnectInterval);
           }
         };
       } catch (error) {
@@ -61,58 +87,103 @@ class TradingWebSocket {
     console.log('Attempting to reconnect WebSocket...');
     try {
       await this.connect(token);
-      // Resubscribe to all channels
+      // Resubscribe to all channels after reconnection
       this.resubscribeAll();
     } catch (error) {
       console.error('Failed to reconnect:', error);
+      
+      // Schedule another reconnect
+      if (this.shouldReconnect && !this.reconnectTimeout) {
+        this.reconnectTimeout = setTimeout(() => {
+          this.reconnect(token);
+        }, this.reconnectInterval);
+      }
     }
   }
 
   disconnect() {
     this.shouldReconnect = false;
+    
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
+    this.stopPingInterval();
+    
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
+    
     this.subscriptions.clear();
     this.messageQueue = [];
   }
 
-  private handleMessage(data: any) {
-    const { type, payload } = data;
-    const handlers = this.subscriptions.get(type);
+  private startPingInterval() {
+    this.pingInterval = setInterval(() => {
+      if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+        this.send({ action: 'ping' });
+      }
+    }, 30000); // Ping every 30 seconds
+  }
+
+  private stopPingInterval() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  private handleMessage(data: WebSocketMessage) {
+    const { type, payload, channel, symbol } = data;
+    
+    // Handle pong response
+    if (type === 'pong') {
+      return;
+    }
+    
+    // Build the subscription key
+    let subscriptionKey = type;
+    if (channel) {
+      subscriptionKey = channel;
+    } else if (type && symbol) {
+      subscriptionKey = `${type}.${symbol}`;
+    }
+    
+    const handlers = this.subscriptions.get(subscriptionKey);
     
     if (handlers) {
       handlers.forEach(handler => handler(payload));
     }
   }
 
-  subscribe(type: string, handler: MessageHandler) {
-    if (!this.subscriptions.has(type)) {
-      this.subscriptions.set(type, new Set());
+  subscribe(channel: string, handler: MessageHandler) {
+    if (!this.subscriptions.has(channel)) {
+      this.subscriptions.set(channel, new Set());
     }
     
-    this.subscriptions.get(type)!.add(handler);
+    this.subscriptions.get(channel)!.add(handler);
     
     // Send subscription message to server
     this.send({
       action: 'subscribe',
-      channel: type,
+      channel: channel,
     });
   }
 
-  unsubscribe(type: string, handler: MessageHandler) {
-    const handlers = this.subscriptions.get(type);
+  unsubscribe(channel: string, handler: MessageHandler) {
+    const handlers = this.subscriptions.get(channel);
     if (handlers) {
       handlers.delete(handler);
       
       if (handlers.size === 0) {
-        this.subscriptions.delete(type);
+        this.subscriptions.delete(channel);
         
         // Send unsubscription message to server
         this.send({
           action: 'unsubscribe',
-          channel: type,
+          channel: channel,
         });
       }
     }
@@ -135,37 +206,37 @@ class TradingWebSocket {
   }
 
   private resubscribeAll() {
-    this.subscriptions.forEach((_, type) => {
+    this.subscriptions.forEach((_, channel) => {
       this.send({
         action: 'subscribe',
-        channel: type,
+        channel: channel,
       });
     });
   }
 
-  // Market data methods
+  // Market data methods - Binance integration
   subscribeToPriceUpdates(symbol: string, handler: (update: PriceUpdate) => void) {
-    this.subscribe(`price.${symbol}`, handler);
+    this.subscribe(`ticker.${symbol.toUpperCase()}`, handler);
   }
 
   unsubscribeFromPriceUpdates(symbol: string, handler: (update: PriceUpdate) => void) {
-    this.unsubscribe(`price.${symbol}`, handler);
+    this.unsubscribe(`ticker.${symbol.toUpperCase()}`, handler);
   }
 
   subscribeToOrderBook(symbol: string, handler: (update: OrderBookUpdate) => void) {
-    this.subscribe(`orderbook.${symbol}`, handler);
+    this.subscribe(`orderbook.${symbol.toUpperCase()}`, handler);
   }
 
   unsubscribeFromOrderBook(symbol: string, handler: (update: OrderBookUpdate) => void) {
-    this.unsubscribe(`orderbook.${symbol}`, handler);
+    this.unsubscribe(`orderbook.${symbol.toUpperCase()}`, handler);
   }
 
   subscribeToTrades(symbol: string, handler: (trade: TradeUpdate) => void) {
-    this.subscribe(`trades.${symbol}`, handler);
+    this.subscribe(`trades.${symbol.toUpperCase()}`, handler);
   }
 
   unsubscribeFromTrades(symbol: string, handler: (trade: TradeUpdate) => void) {
-    this.unsubscribe(`trades.${symbol}`, handler);
+    this.unsubscribe(`trades.${symbol.toUpperCase()}`, handler);
   }
 
   // Account updates
@@ -200,23 +271,42 @@ class TradingWebSocket {
 export const tradingWS = new TradingWebSocket();
 
 // React hook for WebSocket
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useTradingStore } from '@/lib/store/tradingStore';
+import { binanceService } from '@/lib/services/binanceService';
 
 export function useTradingWebSocket() {
   const { isAuthenticated } = useAuthStore();
-  const { selectedSymbol, selectedAccount, updateMarketData, updateOrderBook, addRecentTrade } = useTradingStore();
+  const { 
+    selectedSymbol, 
+    selectedAccount, 
+    updateMarketData, 
+    updateOrderBook, 
+    addRecentTrade 
+  } = useTradingStore();
   const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const connectionRef = useRef<boolean>(false);
 
+  // Initialize WebSocket connection
   useEffect(() => {
-    if (isAuthenticated && token) {
-      tradingWS.connect(token);
-    }
+    const initConnection = async () => {
+      if (isAuthenticated && token && !connectionRef.current) {
+        try {
+          await tradingWS.connect(token);
+          connectionRef.current = true;
+        } catch (error) {
+          console.error('Failed to connect WebSocket:', error);
+        }
+      }
+    };
+
+    initConnection();
 
     return () => {
       if (!isAuthenticated) {
         tradingWS.disconnect();
+        connectionRef.current = false;
       }
     };
   }, [isAuthenticated, token]);
@@ -237,9 +327,23 @@ export function useTradingWebSocket() {
       addRecentTrade(trade);
     };
 
+    // Subscribe to WebSocket streams
     tradingWS.subscribeToPriceUpdates(selectedSymbol, handlePriceUpdate);
     tradingWS.subscribeToOrderBook(selectedSymbol, handleOrderBookUpdate);
     tradingWS.subscribeToTrades(selectedSymbol, handleTradeUpdate);
+
+    // Optionally check stream status via REST API
+    const checkStreamStatus = async () => {
+      try {
+        const tickerStatus = await binanceService.getTickerStreamStatus(selectedSymbol);
+        const tradesStatus = await binanceService.getTradesStreamStatus(selectedSymbol);
+        console.log('Stream status:', { ticker: tickerStatus, trades: tradesStatus });
+      } catch (error) {
+        console.error('Failed to check stream status:', error);
+      }
+    };
+
+    checkStreamStatus();
 
     return () => {
       tradingWS.unsubscribeFromPriceUpdates(selectedSymbol, handlePriceUpdate);
@@ -255,6 +359,19 @@ export function useTradingWebSocket() {
     const handleAccountUpdate = (update: any) => {
       // Handle account balance updates
       console.log('Account update:', update);
+      
+      // Update the account in the accounts array
+      const currentAccounts = useTradingStore.getState().accounts;
+      const updatedAccounts = currentAccounts.map(acc => 
+        acc.id === update.accountId ? { ...acc, ...update } : acc
+      );
+      useTradingStore.getState().setAccounts(updatedAccounts);
+      
+      // Update selected account if it's the one being updated
+      const selectedAccount = useTradingStore.getState().selectedAccount;
+      if (selectedAccount && selectedAccount.id === update.accountId) {
+        useTradingStore.getState().setSelectedAccount({ ...selectedAccount, ...update });
+      }
     };
 
     const handleOrderUpdate = (update: any) => {
@@ -295,5 +412,6 @@ export function useTradingWebSocket() {
 
   return {
     subscribeToSymbol,
+    isConnected: connectionRef.current,
   };
 }

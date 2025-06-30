@@ -26,7 +26,7 @@ const nextConfig = {
       },
     ];
   },
-  
+  /*
   async redirects() {
     return [
       {
@@ -36,6 +36,7 @@ const nextConfig = {
       },
     ];
   },
+  */
   
   webpack: (config) => {
     config.resolve.alias = {

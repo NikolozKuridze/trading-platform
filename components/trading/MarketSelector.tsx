@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Star, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/badge'
 import { useTradingStore } from '@/lib/store/tradingStore'
 import { formatCurrency, formatPercentage } from '@/lib/api/trading'
 import { cn } from '@/lib/utils'
+import { binanceService, Ticker } from '@/lib/api/binance'
+import LoadingSpinner from '@/components/shared/LoadingSpinner'
 
 interface Market {
   symbol: string
@@ -25,22 +27,56 @@ interface Market {
   isFavorite?: boolean
 }
 
-const mockMarkets: Market[] = [
-  { symbol: 'BTC/USDT', baseAsset: 'BTC', quoteAsset: 'USDT', price: 43250.50, change24h: 2.45, volume24h: 2845390000 },
-  { symbol: 'ETH/USDT', baseAsset: 'ETH', quoteAsset: 'USDT', price: 2280.30, change24h: -0.82, volume24h: 1523450000 },
-  { symbol: 'BNB/USDT', baseAsset: 'BNB', quoteAsset: 'USDT', price: 315.20, change24h: 1.23, volume24h: 234500000 },
-  { symbol: 'SOL/USDT', baseAsset: 'SOL', quoteAsset: 'USDT', price: 98.45, change24h: 5.67, volume24h: 345600000 },
-  { symbol: 'XRP/USDT', baseAsset: 'XRP', quoteAsset: 'USDT', price: 0.6234, change24h: -1.45, volume24h: 123450000 },
-  { symbol: 'ADA/USDT', baseAsset: 'ADA', quoteAsset: 'USDT', price: 0.5823, change24h: 3.21, volume24h: 53450000 },
-]
-
 export function MarketSelector() {
   const { selectedSymbol, setSelectedSymbol } = useTradingStore()
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState<string[]>(['BTC/USDT', 'ETH/USDT'])
+  const [markets, setMarkets] = useState<Market[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const currentMarket = mockMarkets.find(m => m.symbol === selectedSymbol) || mockMarkets[0]
+  useEffect(() => {
+    loadMarkets()
+  }, [])
+
+  const loadMarkets = async () => {
+    try {
+      setIsLoading(true)
+      const tickers = await binanceService.getAllTickers()
+      
+      // Transform tickers to markets
+      const marketData = tickers
+        .filter(ticker => ticker.symbol.endsWith('USDT'))
+        .map((ticker: Ticker) => {
+          const baseAsset = ticker.symbol.replace('USDT', '')
+          
+          return {
+            symbol: `${baseAsset}/USDT`,
+            baseAsset,
+            quoteAsset: 'USDT',
+            price: parseFloat(ticker.lastPrice),
+            change24h: parseFloat(ticker.priceChangePercent),
+            volume24h: parseFloat(ticker.quoteVolume),
+          }
+        })
+        .sort((a, b) => b.volume24h - a.volume24h)
+      
+      setMarkets(marketData)
+    } catch (error) {
+      console.error('Failed to load markets:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const currentMarket = markets.find(m => m.symbol === selectedSymbol) || {
+    symbol: selectedSymbol,
+    baseAsset: selectedSymbol.split('/')[0],
+    quoteAsset: 'USDT',
+    price: 0,
+    change24h: 0,
+    volume24h: 0,
+  }
 
   const toggleFavorite = (symbol: string) => {
     setFavorites(prev => 
@@ -50,12 +86,12 @@ export function MarketSelector() {
     )
   }
 
-  const filteredMarkets = mockMarkets.filter(market =>
+  const filteredMarkets = markets.filter(market =>
     market.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
     market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const favoriteMarkets = mockMarkets.filter(m => favorites.includes(m.symbol))
+  const favoriteMarkets = markets.filter(m => favorites.includes(m.symbol))
 
   const handleSelectMarket = (symbol: string) => {
     setSelectedSymbol(symbol)
@@ -68,12 +104,14 @@ export function MarketSelector() {
         <Button variant="outline" className="justify-between min-w-[200px]">
           <div className="flex items-center gap-2">
             <span className="font-semibold">{currentMarket.symbol}</span>
-            <Badge
-              variant={currentMarket.change24h >= 0 ? 'success' : 'destructive'}
-              className="text-xs"
-            >
-              {formatPercentage(currentMarket.change24h)}
-            </Badge>
+            {currentMarket.price > 0 && (
+              <Badge
+                variant={currentMarket.change24h >= 0 ? 'success' : 'destructive'}
+                className="text-xs"
+              >
+                {formatPercentage(currentMarket.change24h)}
+              </Badge>
+            )}
           </div>
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
         </Button>
@@ -99,49 +137,50 @@ export function MarketSelector() {
             </TabsTrigger>
             <TabsTrigger value="all">All Markets</TabsTrigger>
             <TabsTrigger value="spot">Spot</TabsTrigger>
-            <TabsTrigger value="new">New Listings</TabsTrigger>
           </TabsList>
 
           <div className="max-h-[400px] overflow-auto">
-            <TabsContent value="favorites" className="m-0">
-              {favoriteMarkets.length > 0 ? (
-                <MarketList
-                  markets={favoriteMarkets}
-                  favorites={favorites}
-                  onSelect={handleSelectMarket}
-                  onToggleFavorite={toggleFavorite}
-                />
-              ) : (
-                <div className="p-8 text-center text-muted-foreground">
-                  <Star className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No favorite markets yet</p>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="all" className="m-0">
-              <MarketList
-                markets={filteredMarkets}
-                favorites={favorites}
-                onSelect={handleSelectMarket}
-                onToggleFavorite={toggleFavorite}
-              />
-            </TabsContent>
-
-            <TabsContent value="spot" className="m-0">
-              <MarketList
-                markets={filteredMarkets}
-                favorites={favorites}
-                onSelect={handleSelectMarket}
-                onToggleFavorite={toggleFavorite}
-              />
-            </TabsContent>
-
-            <TabsContent value="new" className="m-0">
-              <div className="p-8 text-center text-muted-foreground">
-                <p>No new listings</p>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-[200px]">
+                <LoadingSpinner />
               </div>
-            </TabsContent>
+            ) : (
+              <>
+                <TabsContent value="favorites" className="m-0">
+                  {favoriteMarkets.length > 0 ? (
+                    <MarketList
+                      markets={favoriteMarkets}
+                      favorites={favorites}
+                      onSelect={handleSelectMarket}
+                      onToggleFavorite={toggleFavorite}
+                    />
+                  ) : (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Star className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No favorite markets yet</p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="all" className="m-0">
+                  <MarketList
+                    markets={filteredMarkets}
+                    favorites={favorites}
+                    onSelect={handleSelectMarket}
+                    onToggleFavorite={toggleFavorite}
+                  />
+                </TabsContent>
+
+                <TabsContent value="spot" className="m-0">
+                  <MarketList
+                    markets={filteredMarkets}
+                    favorites={favorites}
+                    onSelect={handleSelectMarket}
+                    onToggleFavorite={toggleFavorite}
+                  />
+                </TabsContent>
+              </>
+            )}
           </div>
         </Tabs>
       </PopoverContent>
